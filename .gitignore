@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.pycache/
+.coverage
+dist/
+build/
+.venv/
+.env
+.agent-brain/
+.obsidian/*
+!.obsidian/app.json
+demo-output/
