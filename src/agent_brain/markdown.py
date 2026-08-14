@@ -25,6 +25,18 @@ class Document:
     body: str
 
 
+@dataclass(frozen=True)
+class Chunk:
+    heading: str
+    heading_line: int
+    start_line: int
+    end_line: int
+    body: str
+
+
+MAX_CHUNK_CHARS = 8192
+
+
 def _scalar(raw: str) -> str:
     value = raw.strip()
     if not value or value[0:1] in {"{", "[", "&", "*", "!", ">", "|"}:
@@ -112,3 +124,72 @@ def facts(body: str) -> list[tuple[str, str, str, int]]:
         tuple(x.strip() for x in match.groups()) + (body.count("\n", 0, match.start()) + 1,)
         for match in FACT_RE.finditer(body)
     ]
+
+
+def _append_bounded_chunk(
+    result: list[Chunk], heading: str, heading_line: int, lines: list[str], start: int, end: int
+) -> None:
+    pending: list[str] = []
+    pending_start = start
+    pending_size = 0
+
+    def flush(line_end: int) -> None:
+        nonlocal pending, pending_size, pending_start
+        if pending:
+            result.append(Chunk(heading, heading_line, pending_start + 1, line_end, "".join(pending)))
+            pending = []
+            pending_size = 0
+
+    for line_index in range(start, end):
+        line = lines[line_index]
+        if len(line) > MAX_CHUNK_CHARS:
+            flush(line_index)
+            for offset in range(0, len(line), MAX_CHUNK_CHARS):
+                result.append(Chunk(
+                    heading, heading_line, line_index + 1, line_index + 1,
+                    line[offset:offset + MAX_CHUNK_CHARS],
+                ))
+            pending_start = line_index + 1
+            continue
+        if pending and pending_size + len(line) > MAX_CHUNK_CHARS:
+            flush(line_index)
+            pending_start = line_index
+        elif not pending:
+            pending_start = line_index
+        pending.append(line)
+        pending_size += len(line)
+    flush(end)
+
+
+def chunks(body: str) -> list[Chunk]:
+    """Split Markdown into deterministic body-relative paragraph chunks."""
+    lines = body.splitlines(keepends=True)
+    result: list[Chunk] = []
+    heading = ""
+    heading_line = 0
+    index = 0
+    while index < len(lines):
+        stripped = lines[index].strip()
+        match = re.match(r"^#{1,6}[ \t]+(.+?)\s*#*\s*$", stripped)
+        if match:
+            heading = match.group(1).strip()
+            heading_line = index + 1
+            index += 1
+            continue
+        if not stripped:
+            index += 1
+            continue
+        start = index
+        index += 1
+        while index < len(lines):
+            candidate = lines[index].strip()
+            if not candidate or re.match(r"^#{1,6}[ \t]+", candidate):
+                break
+            index += 1
+        _append_bounded_chunk(result, heading, heading_line, lines, start, index)
+    if not result and lines:
+        _append_bounded_chunk(result, heading, heading_line, lines, 0, len(lines))
+    if not result:
+        # Preserve v0.1 title/slug retrieval for valid metadata-only pages.
+        result.append(Chunk("", 0, 1, 1, ""))
+    return result

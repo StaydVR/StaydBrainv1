@@ -16,6 +16,20 @@ CREATE TABLE IF NOT EXISTS pages (
 CREATE VIRTUAL TABLE IF NOT EXISTS pages_fts USING fts5(
   page_id UNINDEXED, slug, title, body, tokenize='unicode61'
 );
+CREATE TABLE IF NOT EXISTS chunks (
+  id TEXT PRIMARY KEY, page_id TEXT NOT NULL, heading TEXT NOT NULL,
+  heading_line INTEGER NOT NULL CHECK(heading_line >= 0),
+  start_line INTEGER NOT NULL CHECK(start_line >= 1),
+  end_line INTEGER NOT NULL CHECK(end_line >= start_line), body TEXT NOT NULL,
+  FOREIGN KEY(page_id) REFERENCES pages(id) ON DELETE CASCADE
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+  chunk_id UNINDEXED, page_id UNINDEXED, slug, title, heading, body,
+  tokenize='porter unicode61 remove_diacritics 2'
+);
+CREATE TABLE IF NOT EXISTS vocabulary (
+  term TEXT PRIMARY KEY, document_frequency INTEGER NOT NULL CHECK(document_frequency >= 1)
+);
 CREATE TABLE IF NOT EXISTS links (
   source_id TEXT NOT NULL, target_ref TEXT NOT NULL, target_id TEXT, link_type TEXT NOT NULL, line INTEGER NOT NULL,
   PRIMARY KEY(source_id,target_ref,link_type,line),
@@ -42,6 +56,41 @@ CREATE INDEX IF NOT EXISTS pages_updated ON pages(updated);
 CREATE INDEX IF NOT EXISTS facts_key ON facts(subject,predicate);
 CREATE INDEX IF NOT EXISTS links_target ON links(target_id);
 """
+
+CHUNK_COLUMNS = {"id", "page_id", "heading", "heading_line", "start_line", "end_line", "body"}
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    chunk_row = conn.execute("SELECT sql FROM sqlite_master WHERE name=?", ("chunks",)).fetchone()
+    fts_row = conn.execute("SELECT sql FROM sqlite_master WHERE name=?", ("chunks_fts",)).fetchone()
+    vocabulary_row = conn.execute("SELECT sql FROM sqlite_master WHERE name=?", ("vocabulary",)).fetchone()
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(chunks)")} if chunk_row else set()
+    fts_sql = str(fts_row[0]).casefold() if fts_row else ""
+    if columns == CHUNK_COLUMNS and "porter unicode61" in fts_sql and vocabulary_row:
+        conn.execute("CREATE INDEX IF NOT EXISTS chunks_page ON chunks(page_id,start_line)")
+        conn.execute("PRAGMA user_version=2")
+        return
+    conn.execute("DROP TABLE IF EXISTS chunks_fts")
+    conn.execute("DROP TABLE IF EXISTS chunks")
+    conn.execute("DROP TABLE IF EXISTS vocabulary")
+    conn.executescript("""
+    CREATE TABLE chunks (
+      id TEXT PRIMARY KEY, page_id TEXT NOT NULL, heading TEXT NOT NULL,
+      heading_line INTEGER NOT NULL CHECK(heading_line >= 0),
+      start_line INTEGER NOT NULL CHECK(start_line >= 1),
+      end_line INTEGER NOT NULL CHECK(end_line >= start_line), body TEXT NOT NULL,
+      FOREIGN KEY(page_id) REFERENCES pages(id) ON DELETE CASCADE
+    );
+    CREATE VIRTUAL TABLE chunks_fts USING fts5(
+      chunk_id UNINDEXED, page_id UNINDEXED, slug, title, heading, body,
+      tokenize='porter unicode61 remove_diacritics 2'
+    );
+    CREATE TABLE vocabulary (
+      term TEXT PRIMARY KEY, document_frequency INTEGER NOT NULL CHECK(document_frequency >= 1)
+    );
+    CREATE INDEX chunks_page ON chunks(page_id,start_line);
+    PRAGMA user_version=2;
+    """)
 
 
 def _limits(conn: sqlite3.Connection) -> None:
@@ -71,6 +120,7 @@ def connect(path: Path, *, initialize: bool = True) -> sqlite3.Connection:
         conn.execute("PRAGMA synchronous=FULL")
         if initialize:
             conn.executescript(SCHEMA)
+            _migrate(conn)
         try:
             conn.execute("PRAGMA trusted_schema=OFF")
         except sqlite3.DatabaseError:

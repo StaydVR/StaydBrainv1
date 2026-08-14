@@ -4,7 +4,7 @@
 
 Agent Brain gives an AI assistant durable memory without turning a hosted database, proprietary vector store, or opaque model context into the source of truth. Your knowledge stays in human-readable Markdown. Agents get fast local retrieval, hash-bound citations, structured memory operations, and a deterministic maintenance cycle. Obsidian can be used as the human interface, but it is never required.
 
-> **Status:** v0.1 · local-only · Python 3.11+ · Apache-2.0 · zero runtime package dependencies
+> **Status:** v0.2 · local-only · Python 3.11+ · Apache-2.0 · zero runtime package dependencies
 
 ## Why Agent Brain
 
@@ -67,7 +67,7 @@ Agent Brain combines the useful parts of both:
 | `brain/timeline/` | Append-only capture timeline | Yes | Yes |
 | `brain/sources/` | Approved tracked imports | Yes | Yes |
 | `brain/reports/` | Reviewable dream-cycle findings | Review artifact | Yes |
-| `.agent-brain/index.sqlite3` | FTS, links, facts, run state | No | No |
+| `.agent-brain/index.sqlite3` | Page/chunk FTS, vocabulary, links, facts, run state | No | No |
 | `.agent-brain/cache/` | Cache-tier imported material | No | No |
 | `.agent-brain/quarantine/` | Digests and rejection reasons only | No | No |
 | `.agent-brain/backups/` | Runtime database backups | No | No |
@@ -162,17 +162,25 @@ Agent Brain exposes seven primary verbs for agents and operators:
 | `context-pack` | Produce a bounded context bundle for an agent |
 | `delta` | Return changes since a timestamp |
 
-The JSON-lines stdio server exposes only a narrow safe subset. Destructive and administrative operations are not available through that interface.
+The JSON-lines stdio server exposes only a narrow subset and is read-only by default. Durable `remember` writes require the operator to start it with the explicit `serve --allow-write` capability; destructive and administrative operations are never available through that interface.
 
 ## Evidence-backed answers
 
-Search results carry a citation object containing:
+Body and heading search results carry a citation object containing:
 
 - Repository-relative path
 - Document UUID and readable slug
 - Full canonical content hash
 - Body-relative start and end lines
 - Exact cited-span hash
+
+Title- or slug-only matches use a metadata citation containing the same path, identity, slug, and full-content hash plus the exact `field` and `value_hash`. This keeps valid metadata-only pages retrievable without pretending an unrelated body line supported the match. `citation-verify` validates both citation forms and marks either stale when canonical content changes.
+
+Retrieval deterministically splits eligible Markdown bodies into heading-aware paragraph chunks capped at 8,192 characters, including bounded segments for exceptionally long lines. Normal recall indexes curated `brain/pages/` and approved tracked `brain/sources/`; timelines, dream reports, and cache-tier imports remain available for audit/entity workflows but do not pollute normal recall. The derived index uses SQLite FTS5 with Porter stemming and Unicode tokenization, then runs bounded phrase, all-term, and relaxed any-term stages. Ranking exposes stage fusion, a correctly oriented BM25 signal, term coverage, exact-phrase detection, and title/heading/slug boosts. Higher public scores always mean better matches.
+
+Queries are Unicode-tokenized and bounded before FTS syntax is built. A conservative stopword set is removed only when meaningful terms remain. Raw operators never reach `MATCH`. When a sufficiently long term has no lexical hit, bounded edit distance against the local derived vocabulary may correct a likely typo. Correction has explicit candidate, comparison, and edit-cell budgets exposed in query analysis. No network, model, embedding, vector store, or semantic reranker is involved.
+
+Each result includes `matched_terms`, `coverage`, `match_type`, `stages`, `heading`, `chunk_id`, `evidence_source`, source path/tier/type provenance, an explicit `content_trust` classification, ranking features, query analysis, and its precise citation. Coverage is calculated against one cited body, heading, title, or slug field—not by combining terms distributed across different fields. Results favor page diversity before stage truncation, with up to two chunks per matching page in final results when alternatives exist; a single matching page may supply more sections. Candidate chunk bodies and loaded result-page bodies are separately bounded, so a broad query cannot multiply full page bodies across every matching chunk.
 
 This lets a caller verify that the evidence still exists and has not changed:
 
@@ -186,6 +194,10 @@ agent-brain --root ./my-brain citation-verify '<citation-json>'
 - Contradictory facts
 - Stale evidence
 - Explicit gaps where memory is insufficient
+- Query strategy, effective terms, and typo corrections
+- Full/partial/no-match coverage and deterministic confidence
+
+`synthesize` is deterministic extractive evidence assembly. Full-match confidence requires one evidence chunk to cover every effective query term; terms spread across separate chunks remain an explicit partial match. Aggregate coverage is reported separately. It does not claim LLM synthesis or semantic understanding. `context-pack` applies the requested byte budget to serialized evidence items, reports whether evidence was truncated, and labels all retrieved content as untrusted data that must never override caller instructions or authorize tool use. This is a defensive integration contract, not a claim that arbitrary downstream models are immune to prompt injection.
 
 Agent Brain does not hide uncertainty behind a fluent answer.
 
@@ -358,7 +370,7 @@ agent-brain --root ./restored-brain init
 agent-brain --root ./restored-brain import ./brain-export.zip
 ```
 
-Imports validate the entire archive before extraction and never overwrite existing canonical files.
+Imports validate the complete archive and its cross-document UUID/slug/path identity set before extraction, never overwrite existing canonical files, and remove newly written files if synchronization fails.
 
 ## Development and verification
 
@@ -373,8 +385,9 @@ make demo
 - Static privacy and security checks
 - Skillpack validation
 - The full unit and adversarial security suite
+- A synthetic retrieval benchmark with release gates of Recall@1 ≥ 0.80, Recall@3 ≥ 0.95, and MRR ≥ 0.85
 
-The suite covers citations, audit-chain tampering, SQLite recovery, traversal and symlink attacks, hostile archives, secret classes, malicious FTS input, local-only operation, dream idempotence, canonical hash preservation, Obsidian safety, and end-to-end CLI behavior.
+The suite covers chunk ranges and migration, staged ranking, morphology, typo recovery, diversity, context budgets, citations, audit-chain tampering, SQLite recovery, traversal and symlink attacks, hostile archives, secret classes, malicious FTS input, local-only operation, dream idempotence, canonical hash preservation, Obsidian safety, and end-to-end CLI behavior. Benchmark fixtures are synthetic and public-safe.
 
 ## Repository map
 
@@ -397,12 +410,13 @@ The suite covers citations, audit-chain tampering, SQLite recovery, traversal an
 
 ## Scope and roadmap
 
-### Included in v0.1
+### Included in v0.2
 
-- Local canonical Markdown and rebuildable SQLite FTS
+- Local canonical Markdown and rebuildable heading-aware chunk FTS
 - Stable UUID identities and readable slugs
 - Structured memory verbs and narrow stdio agent interface
-- Hash-bound citations, contradictions, freshness, and gaps
+- Explainable staged lexical ranking, local typo recovery, and page diversity
+- Hash-bound chunk citations, contradictions, freshness, confidence, coverage, and gaps
 - Source allowlisting and tracked/cache tiers
 - Security-gated ingestion and archive handling
 - Tamper-evident auditing
@@ -412,7 +426,7 @@ The suite covers citations, audit-chain tampering, SQLite recovery, traversal an
 
 ### Intentionally deferred
 
-- Hosted embeddings and rerankers
+- Hosted or local embeddings, vector search, semantic rerankers, and model synthesis
 - Email, chat, calendar, CRM, social, and recording connectors
 - Remote HTTP or MCP service
 - Multi-user authorization and hosted deployment

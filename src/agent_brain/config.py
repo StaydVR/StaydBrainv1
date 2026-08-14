@@ -9,7 +9,7 @@ from .errors import ValidationError
 from .util import atomic_write, json_bytes, reject_symlink_chain
 
 
-DEFAULT_CONFIG = """# Agent Brain v0.1 configuration
+DEFAULT_CONFIG = """# Agent Brain v0.2 configuration
 version = 1
 max_ingest_bytes = 1048576
 stale_after_days = 90

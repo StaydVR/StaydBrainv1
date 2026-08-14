@@ -354,6 +354,30 @@ class BrainCase(unittest.TestCase):
         with self.assertRaises(SecurityError):
             self.brain.import_archive(duplicate)
 
+        identity_collision = self.root / "identity-collision.zip"
+        one = self._canonical("identity-one", "First archive page.")
+        two = self._canonical("identity-two", "Second archive page.")
+        one_id = next(line for line in one.splitlines() if line.startswith("id: "))
+        two_id = next(line for line in two.splitlines() if line.startswith("id: "))
+        two = two.replace(two_id, one_id, 1)
+        with zipfile.ZipFile(identity_collision, "w") as archive:
+            archive.writestr("brain/pages/identity-one.md", one)
+            archive.writestr("brain/pages/identity-two.md", two)
+        with self.assertRaises(ValidationError):
+            self.brain.import_archive(identity_collision)
+        self.assertFalse((self.root / "brain/pages/identity-one.md").exists())
+        self.assertFalse((self.root / "brain/pages/identity-two.md").exists())
+
+        rollback_archive = self.root / "rollback.zip"
+        with zipfile.ZipFile(rollback_archive, "w") as archive:
+            archive.writestr("brain/pages/rollback.md", self._canonical("rollback", "Rollback-safe page."))
+        original_sync = self.brain.sync
+        with mock.patch.object(self.brain, "sync", side_effect=[ValidationError("injected sync failure"), original_sync()]):
+            with self.assertRaises(ValidationError):
+                self.brain.import_archive(rollback_archive)
+        self.assertFalse((self.root / "brain/pages/rollback.md").exists())
+        self.assertTrue(self.brain.doctor()["ok"])
+
         self._write_config(ingest=128, archive_files=2, archive_bytes=256)
         crowded = self.root / "crowded.zip"
         with zipfile.ZipFile(crowded, "w") as archive:
@@ -499,7 +523,11 @@ class BrainCase(unittest.TestCase):
                              + json.dumps({"id": 2, "verb": "dream", "args": {}}) + "\nnot-json\n")
         sink = io.StringIO(); serve(self.brain, source, sink)
         lines_out = [json.loads(line) for line in sink.getvalue().splitlines()]
-        self.assertTrue(lines_out[0]["ok"]); self.assertFalse(lines_out[1]["ok"]); self.assertFalse(lines_out[2]["ok"])
+        self.assertFalse(lines_out[0]["ok"]); self.assertFalse(lines_out[1]["ok"]); self.assertFalse(lines_out[2]["ok"])
+        write_source = io.StringIO(json.dumps({"id": 3, "verb": "remember", "args": {
+            "title": "Server note", "content": "Server-safe word."}}) + "\n")
+        write_sink = io.StringIO(); serve(self.brain, write_source, write_sink, allow_write=True)
+        self.assertTrue(json.loads(write_sink.getvalue())["ok"])
         self.assertEqual(dispatch(self.brain, {"verb": "status", "args": {}})["integrity"], "ok")
 
     def test_all_operations_are_local_only_without_network(self) -> None:

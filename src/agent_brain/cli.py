@@ -21,8 +21,10 @@ def parser() -> argparse.ArgumentParser:
     remember = sub.add_parser("remember", aliases=["capture"])
     remember.add_argument("title"); remember.add_argument("content"); remember.add_argument("--type", default="note")
     remember.add_argument("--tag", action="append", default=[])
-    search = sub.add_parser("search", aliases=["recall"])
-    search.add_argument("query"); search.add_argument("--limit", type=int, default=10)
+    search = sub.add_parser("search", aliases=["recall"],
+                            help="deterministic local chunk search with cited lexical evidence")
+    search.add_argument("query", help="natural-language or keyword query; operators are treated as text")
+    search.add_argument("--limit", type=int, default=10, help="maximum chunks to return (1-100)")
     entity = sub.add_parser("entity"); entity.add_argument("id")
     synth = sub.add_parser("synthesize", aliases=["brief"]); synth.add_argument("query"); synth.add_argument("--limit", type=int, default=5)
     forget = sub.add_parser("forget"); forget.add_argument("id")
@@ -41,7 +43,9 @@ def parser() -> argparse.ArgumentParser:
     sub.add_parser("verify")
     sub.add_parser("quarantine-list")
     citation = sub.add_parser("citation-verify"); citation.add_argument("citation", help="citation JSON object")
-    sub.add_parser("serve")
+    server = sub.add_parser("serve")
+    server.add_argument("--allow-write", action="store_true",
+                        help="explicitly enable durable remember writes on this stdio channel")
     return p
 
 
@@ -74,7 +78,7 @@ def execute(args: argparse.Namespace) -> Any:
             raise AgentBrainError("citation must be valid JSON") from exc
         return brain.verify_citation(citation)
     if args.command == "serve":
-        serve(brain)
+        serve(brain, allow_write=args.allow_write)
         return None
     raise AgentBrainError("unknown command")
 

@@ -1,4 +1,4 @@
-.PHONY: test static verify demo
+.PHONY: test static benchmark verify demo
 
 PYTHON ?= $(shell command -v python3.11 2>/dev/null || command -v python3)
 export PYTHONPATH := src
@@ -12,7 +12,10 @@ static:
 	$(PYTHON) scripts/static_check.py
 	$(PYTHON) scripts/validate_skills.py
 
-verify: static test
+benchmark:
+	$(PYTHON) scripts/retrieval_benchmark.py
+
+verify: static test benchmark
 
 demo:
 	$(PYTHON) scripts/demo.py
