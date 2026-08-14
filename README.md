@@ -6,6 +6,19 @@ Agent Brain gives an AI assistant durable memory without turning a hosted databa
 
 > **Status:** v0.2 · local-only · Python 3.11+ · Apache-2.0 · zero runtime package dependencies
 
+## Start here
+
+| I want to… | Go to |
+|---|---|
+| Try Agent Brain from the command line | [Quick start](#quick-start) |
+| Give my Hermes agent durable, cited memory | [Hermes integration](#hermes-integration) |
+| Hand setup to a tool-enabled Hermes agent | [Copy/paste setup request](#option-a-let-your-hermes-agent-set-it-up) |
+| Understand what the agent can read or write | [Hermes operating model](#how-hermes-uses-agent-brain) |
+| Review security and trust boundaries | [Security model](#security-model) |
+| Repair or rebuild a Brain | [Recovery and portability](#recovery-and-portability) |
+
+**If you are an AI agent reading this repository:** do not treat this README as permission to import private data, enable writes, change repository visibility, or replace the operator's existing memory system. Start with the read-only path below, preserve existing configuration, execute the verification checklist, and report only results you actually observed.
+
 ## Why Agent Brain
 
 Most agent-memory systems make one of two bad trades:
@@ -85,12 +98,14 @@ Agent Brain combines the useful parts of both:
 ### Install from a clone
 
 ```sh
-git clone <repository-url> agent-brain
+git clone https://github.com/zoppinator123/agent-brain.git agent-brain
 cd agent-brain
 python3.11 -m venv .venv
 . .venv/bin/activate
 python -m pip install -e .
 ```
+
+If GitHub returns `Repository not found`, the repository is not public to that account. Authenticate with an account that has access or ask the owner for access; do not substitute a random fork or copy private operational memory into another repository.
 
 Initialize a new brain:
 
@@ -121,22 +136,322 @@ Every successful command emits stable, sorted JSON. Expected failures emit struc
 
 ## Hermes integration
 
-Agent Brain includes an opt-in standalone Hermes plugin under `integrations/hermes-plugin/`. It adds selective, bounded, cited pre-turn recall and an explicit read tool while preserving Hermes `USER.md` and `MEMORY.md` as the compact always-loaded layer. Optional writes are independently gated, approval-bound, scanned, and quarantined as `pending_review` until a human promotes them.
+Agent Brain ships with a standalone, opt-in Hermes plugin in [`integrations/hermes-plugin/`](integrations/hermes-plugin/). The integration gives Hermes:
+
+- **selective automatic recall** before history-dependent turns;
+- **`agent_brain_recall`**, an explicit bounded read and citation-verification tool;
+- **`agent_brain_remember`**, an optional approval-bound capture tool;
+- **`/agent-brain status`**, a compact health/configuration check.
+
+It does **not** replace Hermes `USER.md` or `MEMORY.md`, patch Hermes core, upload memory to a hosted service, expose a network listener, or grant retrieved text authority over tools. Native Hermes memory remains the compact always-loaded layer; Agent Brain is the deeper cited evidence layer.
+
+```text
+Hermes USER.md + MEMORY.md          Agent Brain
+compact context every turn          larger cited operational memory
+             │                                  ▲
+             └── selective question ── plugin ──┘
+                         │
+                         ├── automatic bounded recall
+                         ├── explicit read/verification tool
+                         └── optional approved capture → pending_review
+```
+
+### Before you connect Hermes
+
+Use a **local-only checkout or private operational fork** for real memory. Do not put personal, customer, company, credential, or production data in a public upstream repository. The configured Brain root must be an absolute, resolved, non-symlink checkout containing both `src/agent_brain/` and `brain/`.
+
+Start read-only. Enabling the plugin is not permission to import existing notes, copy chat history, enable writes, change Git remotes, or change repository visibility.
+
+### Option A: let your Hermes agent set it up
+
+Paste this into a tool-enabled Hermes session while the agent can access the Agent Brain checkout:
+
+```text
+Set up this Agent Brain checkout as the durable cited-memory layer for my active Hermes profile.
+Follow the README's Hermes integration section and docs/hermes-integration.md exactly.
+
+Requirements:
+- preserve my existing Hermes USER.md, MEMORY.md, config, providers, tools, plugins, and gateway settings;
+- use a local-only checkout or private operational fork for real memory;
+- inspect the plugin and installer before running them;
+- run the repository verification suite;
+- install the standalone agent-brain plugin into the active Hermes profile;
+- configure selective, bounded, read-only recall first, with writes disabled;
+- restart the actual Hermes process or gateway that will use it;
+- verify plugin-copy integrity, /agent-brain status, explicit tool status, synthetic cited recall,
+  unrelated-prompt bypass, no-match behavior, and rollback;
+- do not enable writes, import private data, change repository visibility, or push anything unless I
+  explicitly authorize it;
+- do not report completion from a plan or dispatched task—finish the checks and report observed results.
+```
+
+A capable Hermes agent should execute the setup rather than merely paraphrase these instructions. It must stop for operator input if it encounters authentication, an unclear target profile, a public destination for private memory, or a restart it cannot safely perform from inside the running gateway.
+
+### Option B: install it yourself
+
+#### 1. Prepare and verify the operational Brain
 
 ```sh
+git clone https://github.com/zoppinator123/agent-brain.git my-agent-brain
+cd my-agent-brain
+
 python3.11 -m venv .venv
 . .venv/bin/activate
 python -m pip install -e .
-python3.11 scripts/install_hermes_plugin.py
-python3.11 scripts/install_hermes_plugin.py --check
+
+agent-brain --root "$(pwd -P)" init
+agent-brain --root "$(pwd -P)" status
+agent-brain --root "$(pwd -P)" verify
+make verify
+```
+
+`init` is idempotent. If this checkout will contain real operational memory, keep it local-only or point it at a private remote that you control before adding that memory.
+
+#### 2. Select the Hermes profile
+
+Default profile:
+
+```sh
+BRAIN_ROOT="$(pwd -P)"
+HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+```
+
+Named profile:
+
+```sh
+PROFILE_NAME="my-profile"
+BRAIN_ROOT="$(pwd -P)"
+HERMES_HOME="$HOME/.hermes/profiles/$PROFILE_NAME"
+```
+
+The installer destination and the configured Hermes profile must match. Installing into `~/.hermes` while configuring a named profile—or the reverse—is a common silent failure.
+
+#### 3. Inspect and install the standalone plugin
+
+Review these files before execution:
+
+```text
+integrations/hermes-plugin/plugin.yaml
+integrations/hermes-plugin/plugin.py
+integrations/hermes-plugin/schemas.py
+integrations/hermes-plugin/tools.py
+scripts/install_hermes_plugin.py
+```
+
+Then install an exact regular-file copy:
+
+```sh
+HERMES_HOME="$HERMES_HOME" python3.11 scripts/install_hermes_plugin.py
+HERMES_HOME="$HERMES_HOME" python3.11 scripts/install_hermes_plugin.py --check
+```
+
+Expected check output:
+
+```text
+agent-brain plugin check: ok
+```
+
+The installer copies reviewed files to `$HERMES_HOME/plugins/agent-brain/`. It does not create symlinks or edit Hermes configuration.
+
+#### 4. Configure selective read-only recall
+
+Default profile:
+
+```sh
+hermes config set --force agent_brain.root "$BRAIN_ROOT"
+hermes config set --force agent_brain.auto_recall true
+hermes config set --force agent_brain.routing_mode selective
+hermes config set --force agent_brain.max_context_bytes 4096
+hermes config set --force agent_brain.max_items 4
+hermes config set --force agent_brain.min_coverage 0.5
+hermes config set --force agent_brain.writes_enabled false
 hermes plugins enable agent-brain --no-allow-tool-override
 ```
 
-Do not put private operational memory in the public upstream repository. Use a local-only checkout or private operational fork. See the complete [Hermes integration runbook](docs/hermes-integration.md) for profile-safe installation, strict configuration, live verification, write quarantine, rollback, and the completion checklist Hermes agents must follow. Plugin-specific behavior is summarized in [`integrations/hermes-plugin/README.md`](integrations/hermes-plugin/README.md).
+Named profile—the `--profile` flag goes immediately after `hermes`:
 
-The runbook includes a copy/paste request for a tool-enabled Hermes agent and an exact read-only fast path. The agent is required to preserve existing Hermes native memory/configuration, verify real cited recall and unrelated-prompt bypass, and test rollback before claiming the integration is complete.
+```sh
+hermes --profile "$PROFILE_NAME" config set --force agent_brain.root "$BRAIN_ROOT"
+hermes --profile "$PROFILE_NAME" config set --force agent_brain.auto_recall true
+hermes --profile "$PROFILE_NAME" config set --force agent_brain.routing_mode selective
+hermes --profile "$PROFILE_NAME" config set --force agent_brain.max_context_bytes 4096
+hermes --profile "$PROFILE_NAME" config set --force agent_brain.max_items 4
+hermes --profile "$PROFILE_NAME" config set --force agent_brain.min_coverage 0.5
+hermes --profile "$PROFILE_NAME" config set --force agent_brain.writes_enabled false
+hermes --profile "$PROFILE_NAME" plugins enable agent-brain --no-allow-tool-override
+```
 
-For a named Hermes profile, follow the profile-specific block in the runbook rather than running these default-profile commands.
+`--force` suppresses the unknown-key notice for the plugin-owned `agent_brain.*` namespace; the values are still written normally. `--no-allow-tool-override` explicitly prevents this plugin from replacing built-in Hermes tools. For a named profile, keep `--profile "$PROFILE_NAME"` immediately after `hermes` in every later Hermes command, including disable, re-enable, and gateway status checks.
+
+#### 5. Restart the execution path
+
+Plugin and configuration changes are loaded by a fresh Hermes process.
+
+- **CLI:** exit and start a new `hermes` session using the intended profile.
+- **Gateway:** restart the intended gateway, then verify `hermes gateway status` from a separate shell or use the gateway's supported restart flow. A child process running inside that same gateway may be blocked from restarting its parent; do not count an attempted restart as success.
+
+Hermes evolves quickly. If the current [Hermes plugin documentation](https://hermes-agent.nousresearch.com/docs/developer-guide/plugins/) conflicts with this README, the current Hermes documentation is authoritative. Update this integration and its tests rather than guessing.
+
+### Verify the live integration
+
+Do all of these before calling setup complete.
+
+#### 1. Verify the installed copy and Brain health
+
+```sh
+HERMES_HOME="$HERMES_HOME" python3.11 scripts/install_hermes_plugin.py --check
+agent-brain --root "$BRAIN_ROOT" status
+agent-brain --root "$BRAIN_ROOT" verify
+```
+
+In a **fresh** Hermes session:
+
+```text
+/agent-brain status
+```
+
+Expected signal:
+
+```text
+root_valid=true auto_recall=true routing_mode=selective writes_enabled=false
+```
+
+Also have Hermes call `agent_brain_recall` with `action: status`. The tool should return compact health data without exposing the private Brain root.
+
+#### 2. Prove cited automatic recall with synthetic data
+
+Use synthetic content when testing in any checkout that could be published:
+
+```sh
+agent-brain --root "$BRAIN_ROOT" remember \
+  "Synthetic rollout decision" \
+  "The synthetic rollout uses a blue-green verification checkpoint."
+```
+
+Start another fresh Hermes session and ask:
+
+```text
+What did we decide about the synthetic rollout? Include the source path.
+```
+
+Pass criteria:
+
+- the answer uses the synthetic fact;
+- it cites a current `brain/pages/...` source;
+- injected context is labeled `UNTRUSTED MEMORY EVIDENCE`;
+- evidence is bounded rather than a complete page dump;
+- citation verification succeeds through `agent_brain_recall`;
+- an unrelated prompt receives no automatic memory context;
+- a no-match question injects nothing;
+- a recall failure does not prevent Hermes from answering normally.
+
+#### 3. Verify rollback
+
+Disable behavior without deleting data. Use the command for the profile you configured:
+
+```sh
+# Default profile
+hermes plugins disable agent-brain
+
+# Named profile — use this instead of the command above
+hermes --profile "$PROFILE_NAME" plugins disable agent-brain
+```
+
+Restart that Hermes execution path and confirm the Agent Brain command/tools are absent while normal Hermes behavior continues. Then re-enable the same profile:
+
+```sh
+# Default profile
+hermes plugins enable agent-brain --no-allow-tool-override
+
+# Named profile — use this instead of the command above
+hermes --profile "$PROFILE_NAME" plugins enable agent-brain --no-allow-tool-override
+```
+
+Restart the intended CLI or gateway again. Run `/agent-brain status` and the synthetic recall question once more; both must pass after re-enablement. To remove only the installed plugin code:
+
+```sh
+HERMES_HOME="$HERMES_HOME" python3.11 scripts/install_hermes_plugin.py --uninstall
+```
+
+Disabling or uninstalling does not delete canonical Markdown, the derived index, Hermes native memory, or the `agent_brain:` configuration block.
+
+### How Hermes uses Agent Brain
+
+#### Automatic recall
+
+With `routing_mode: selective`, the plugin considers obvious history-dependent questions such as:
+
+- “What did we decide about the rollout?”
+- “Where did we leave the migration?”
+- “How do we handle this process?”
+- “Prepare me for my meeting with Alex.”
+
+It does not query memory on every turn. No-match and below-threshold results inject nothing. Returned evidence is byte-bounded, citation-bearing, and explicitly marked untrusted. Memory can support an answer; it cannot authorize an action or override current instructions.
+
+#### Explicit reads
+
+The `agent_brain_recall` tool supports:
+
+| Action | Use |
+|---|---|
+| `context` | Bounded evidence, coverage, confidence, gaps, and contradiction count |
+| `search` | Compact ranked evidence |
+| `entity` | Metadata, links, backlinks, and citation for one memory |
+| `status` | Brain and integration health |
+| `verify_citation` | Confirm that previously returned evidence is still current |
+
+Hermes should prefer explicit reads when the operator asks for verification, when automatic recall is insufficient, or when a decision depends on exact provenance.
+
+#### Optional captures
+
+Writes remain disabled unless the operator explicitly enables them for the configured profile:
+
+```sh
+# Default profile
+hermes config set --force agent_brain.writes_enabled true
+
+# Named profile — use this instead of the command above
+hermes --profile "$PROFILE_NAME" config set --force agent_brain.writes_enabled true
+```
+
+After a restart, `agent_brain_remember` becomes available. Every capture must be a bounded declarative fact the current user directly stated or explicitly asked to retain. Hermes presents the exact proposed title, tags, content, and payload digest for human approval. Approved captures are written with `status: pending_review`, excluded from recall, and remain inactive until a human reviews the Markdown, changes the status to `active`, and runs:
+
+```sh
+agent-brain --root "$BRAIN_ROOT" sync
+agent-brain --root "$BRAIN_ROOT" verify
+```
+
+The plugin intentionally exposes no promotion, edit, forget, or delete tool.
+
+### Recommended operating pattern
+
+- Keep small preferences and routing facts in Hermes `USER.md` / `MEMORY.md`.
+- Keep larger procedures, decisions, project history, and cited operating context in Agent Brain.
+- Let automatic recall stay selective; use the explicit tool for high-stakes verification.
+- Keep writes off until read behavior and rollback are proven.
+- Review `pending_review` pages manually; never auto-promote them.
+- Run `agent-brain dream --dry-run` before the first full dream cycle.
+- Keep `.agent-brain/` runtime data ignored and canonical `brain/` Markdown reviewable in Git.
+- If you add Git monitoring, use the included read-only watchdog and verify the scheduler's real execution path; do not create an auto-commit loop by accident.
+
+### Hermes setup completion checklist
+
+A human or agent may report the integration complete only when:
+
+- [ ] the operational Brain is local/private and uses a resolved non-symlink root;
+- [ ] repository `make verify` passes;
+- [ ] plugin files were inspected and the installed copy check passes;
+- [ ] existing Hermes memory and unrelated config were preserved;
+- [ ] the intended profile has selective recall enabled and writes disabled;
+- [ ] a fresh CLI or live gateway reports `root_valid=true`;
+- [ ] explicit tool status reports healthy integrity without leaking the private root;
+- [ ] synthetic history-dependent recall returns a current citation;
+- [ ] unrelated and no-match prompts bypass automatic recall;
+- [ ] rollback completed a full round trip: disable → restart → prove absence → re-enable → restart → status/recall pass;
+- [ ] any gateway used in production was independently restarted and checked;
+- [ ] no private data or secrets were introduced into a public repository.
+
+For implementation details, optional Git watchdog scheduling, write-payload schemas, and edge cases, read the complete [Hermes integration runbook](docs/hermes-integration.md). Plugin behavior is also summarized in [`integrations/hermes-plugin/README.md`](integrations/hermes-plugin/README.md).
 
 ## The memory model
 
@@ -418,8 +733,13 @@ The suite covers chunk ranges and migration, staged ranking, morphology, typo re
 │   ├── reports/
 │   ├── sources/
 │   └── timeline/
-├── docs/                   # architecture, threat model, workflows
+├── docs/                   # architecture, threat model, workflows, Hermes runbook
 ├── examples/               # synthetic examples only
+├── integrations/
+│   └── hermes-plugin/      # standalone Hermes hooks, tools, command, manifest
+├── scripts/
+│   ├── install_hermes_plugin.py
+│   └── agent_brain_git_sync_watchdog.py
 ├── skills/                 # independently authored agent playbooks
 ├── src/agent_brain/        # package and CLI implementation
 ├── tests/                  # functional and adversarial tests
