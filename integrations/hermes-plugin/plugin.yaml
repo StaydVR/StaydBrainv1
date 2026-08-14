@@ -1,0 +1,13 @@
+name: agent-brain
+version: 1.0.0
+description: Security-first local Agent Brain recall and explicitly approved capture for Hermes
+manifest_version: 2
+api_version: 1
+license: Apache-2.0
+tags: [memory, local-first, security]
+provides_tools:
+  - agent_brain_recall
+  - agent_brain_remember
+provides_hooks:
+  - pre_llm_call
+  - pre_tool_call

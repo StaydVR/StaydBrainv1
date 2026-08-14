@@ -105,8 +105,11 @@ class Brain:
         return str(uuid.uuid4())
 
     def remember(self, title: str, content: str, *, page_type: str = "note", tags: Iterable[str] = (),
-                 source: str = "capture", page_id: str | None = None) -> dict[str, Any]:
+                 source: str = "capture", page_id: str | None = None,
+                 status: str = "active") -> dict[str, Any]:
         self._require()
+        if status not in {"active", "pending_review"}:
+            raise ValidationError("status must be active or pending_review")
         now = utc_now()
         slug = self.slug(page_id or title)
         rel = safe_relative(f"pages/{slug}.md")
@@ -117,7 +120,7 @@ class Brain:
         document_id = self._new_id()
         meta: dict[str, object] = {
             "id": document_id, "slug": slug, "title": title, "type": page_type, "created": now,
-            "updated": now, "tags": sorted(set(tags)), "source": source, "status": "active",
+            "updated": now, "tags": sorted(set(tags)), "source": source, "status": status,
         }
         data = markdown.render(meta, content.rstrip() + "\n").encode()
         digest = self._scan(data)
@@ -125,7 +128,7 @@ class Brain:
         self._append_timeline(slug, title, now)
         self.sync()
         self._audit("remember", digest, {"id": document_id, "slug": slug})
-        return {"id": document_id, "slug": slug, "path": str(rel), "sha256": digest}
+        return {"id": document_id, "slug": slug, "path": str(rel), "sha256": digest, "status": status}
 
     capture = remember
 
@@ -241,9 +244,9 @@ class Brain:
             for path, tier, doc, digest in parsed:
                 document_id, slug = str(doc.meta["id"]), str(doc.meta["slug"])
                 rel = str(path.relative_to(self.root))
-                forgotten = int(doc.meta.get("status") == "forgotten")
+                inactive = int(doc.meta.get("status", "active") != "active")
                 args = (document_id, slug, rel, str(doc.meta["title"]), str(doc.meta["type"]), str(doc.meta["created"]),
-                        str(doc.meta["updated"]), doc.body, digest, tier, utc_now(), forgotten)
+                        str(doc.meta["updated"]), doc.body, digest, tier, utc_now(), inactive)
                 conn.execute("INSERT INTO pages(id,slug,path,title,type,created,updated,body,content_hash,storage_tier,indexed_at,deleted) "
                              "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET slug=excluded.slug,path=excluded.path,"
                              "title=excluded.title,type=excluded.type,created=excluded.created,updated=excluded.updated,body=excluded.body,"
@@ -257,8 +260,8 @@ class Brain:
             conn.execute("DELETE FROM facts")
             for _path, _tier, doc, _digest in parsed:
                 document_id, slug = str(doc.meta["id"]), str(doc.meta["slug"])
-                forgotten = int(doc.meta.get("status") == "forgotten")
-                if forgotten:
+                inactive = int(doc.meta.get("status", "active") != "active")
+                if inactive:
                     continue
                 if self._retrieval_eligible(_path, _tier):
                     conn.execute("INSERT INTO pages_fts(page_id,slug,title,body) VALUES(?,?,?,?)", (document_id, slug, doc.meta["title"], doc.body))
@@ -286,7 +289,7 @@ class Brain:
                 vocabulary_rows(
                     " ".join((str(doc.meta["slug"]).replace("-", " "), str(doc.meta["title"]), doc.body))
                     for path, tier, doc, _ in parsed
-                    if doc.meta.get("status") != "forgotten" and self._retrieval_eligible(path, tier)
+                    if doc.meta.get("status", "active") == "active" and self._retrieval_eligible(path, tier)
                 ),
             )
             conn.execute("DELETE FROM pages_fts WHERE page_id IN (SELECT id FROM pages WHERE deleted=1)")
