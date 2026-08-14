@@ -781,8 +781,8 @@ class Brain:
                     for r in conn.execute("SELECT term,document_frequency FROM vocabulary ORDER BY term")
                 ]
             expected = {str(doc.meta["id"]): digest for _, _, doc, digest in parsed
-                        if doc.meta.get("status") != "forgotten"}
-            retrieval_parsed = [item for item in parsed if item[2].meta.get("status") != "forgotten"
+                        if doc.meta.get("status", "active") == "active"}
+            retrieval_parsed = [item for item in parsed if item[2].meta.get("status", "active") == "active"
                                 and self._retrieval_eligible(item[0], item[1])]
             expected_page_fts = sorted(str(doc.meta["id"]) for _, _, doc, _ in retrieval_parsed)
             expected_chunks = sorted(

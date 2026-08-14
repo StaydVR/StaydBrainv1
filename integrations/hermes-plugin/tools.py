@@ -120,7 +120,12 @@ def agent_brain_recall(args: dict, **kwargs) -> str:
         if action == "status":
             if set(args) != {"action"}:
                 raise plugin.PluginValidationError("status takes no additional arguments")
-            return plugin.json_output({"ok": True, "action": action, "status": brain.status()})
+            status = brain.status()
+            return plugin.json_output({
+                "ok": True,
+                "action": action,
+                "status": {"pages": status["pages"], "integrity": status["integrity"]},
+            })
         if action == "verify_citation":
             if set(args) != {"action", "citation"} or not isinstance(args.get("citation"), dict):
                 raise plugin.PluginValidationError("invalid citation arguments")

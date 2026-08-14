@@ -124,14 +124,19 @@ Every successful command emits stable, sorted JSON. Expected failures emit struc
 Agent Brain includes an opt-in standalone Hermes plugin under `integrations/hermes-plugin/`. It adds selective, bounded, cited pre-turn recall and an explicit read tool while preserving Hermes `USER.md` and `MEMORY.md` as the compact always-loaded layer. Optional writes are independently gated, approval-bound, scanned, and quarantined as `pending_review` until a human promotes them.
 
 ```sh
+python3.11 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e .
 python3.11 scripts/install_hermes_plugin.py
 python3.11 scripts/install_hermes_plugin.py --check
-hermes plugins enable agent-brain
+hermes plugins enable agent-brain --no-allow-tool-override
 ```
 
 Do not put private operational memory in the public upstream repository. Use a local-only checkout or private operational fork. See the complete [Hermes integration runbook](docs/hermes-integration.md) for profile-safe installation, strict configuration, live verification, write quarantine, rollback, and the completion checklist Hermes agents must follow. Plugin-specific behavior is summarized in [`integrations/hermes-plugin/README.md`](integrations/hermes-plugin/README.md).
 
 The runbook includes a copy/paste request for a tool-enabled Hermes agent and an exact read-only fast path. The agent is required to preserve existing Hermes native memory/configuration, verify real cited recall and unrelated-prompt bypass, and test rollback before claiming the integration is complete.
+
+For a named Hermes profile, follow the profile-specific block in the runbook rather than running these default-profile commands.
 
 ## The memory model
 

@@ -71,6 +71,12 @@ def _home() -> Path:
     home = Path(raw).expanduser() if raw else Path.home() / ".hermes"
     if not home.is_absolute():
         raise InstallError("HERMES_HOME must be absolute")
+    if home.exists() and home.is_symlink():
+        raise InstallError("HERMES_HOME itself must not be a symlink")
+    try:
+        home = home.resolve(strict=False)
+    except OSError as exc:
+        raise InstallError("HERMES_HOME cannot be resolved") from exc
     _validate_chain(home)
     return home
 
@@ -196,7 +202,10 @@ def main() -> int:
             print("agent-brain plugin uninstalled; configuration and data preserved")
             return 0
         install()
-        print("agent-brain plugin installed; enable it explicitly with: hermes plugins enable agent-brain")
+        print(
+            "agent-brain plugin installed; enable it explicitly with: "
+            "hermes plugins enable agent-brain --no-allow-tool-override"
+        )
         return 0
     except (InstallError, OSError) as exc:
         print(f"agent-brain plugin operation failed: {exc}")

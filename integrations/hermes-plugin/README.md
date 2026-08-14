@@ -11,9 +11,12 @@ If you are delegating setup to Hermes, paste the copy/paste request from that ru
 From the private/local operational Agent Brain repository:
 
 ```sh
+python3.11 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e .
 python3.11 scripts/install_hermes_plugin.py
 python3.11 scripts/install_hermes_plugin.py --check
-hermes plugins enable agent-brain
+hermes plugins enable agent-brain --no-allow-tool-override
 ```
 
 Then configure the active profile without replacing its existing config:
@@ -73,6 +76,8 @@ Use `/agent-brain status` for a compact configuration/root check.
 
 `agent_brain_remember` is available only when writes are enabled. It accepts only direct-user-request/direct-user-statement provenance, rejects unbounded or known instruction-bearing captures, and invokes `Brain.remember()` so scanning, audit, canonical atomic writes, timeline updates, and index synchronization remain enforced.
 
+Those provenance fields are constrained model claims rather than trusted runtime proof. The exact-payload approval prompt labels the content as model-proposed and requires the human reviewer to verify that the current user directly stated or requested it.
+
 Hermes's `pre_tool_call` directive uses a SHA-256 rule key bound to the exact validated payload. The approval prompt displays that exact bounded payload; approval for one capture cannot authorize another.
 
 Approved captures are written as `pending_review`. They remain excluded from search, vocabulary, relations, manual recall, and automatic context until a human inspects the Markdown, changes its status to `active`, and runs `agent-brain sync`. The plugin exposes no promotion, edit, forget, or delete tool.
@@ -80,6 +85,14 @@ Approved captures are written as `pending_review`. They remain excluded from sea
 ## Profiles
 
 The installer copies into the `HERMES_HOME` supplied to the process. Runtime configuration resolves through Hermes's active profile-home resolver. For named profiles, install and configure the same profile home; do not assume the default `~/.hermes` path.
+
+```sh
+PROFILE_NAME="my-profile"
+HERMES_HOME="$HOME/.hermes/profiles/$PROFILE_NAME" \
+  python3.11 scripts/install_hermes_plugin.py
+hermes --profile "$PROFILE_NAME" config set --force agent_brain.root "$BRAIN_ROOT"
+hermes --profile "$PROFILE_NAME" plugins enable agent-brain --no-allow-tool-override
+```
 
 ## Rollback
 
@@ -92,4 +105,4 @@ Disabling or uninstalling removes plugin behavior only. It does not change canon
 
 ## Optional Git health check
 
-The full runbook also installs `scripts/agent_brain_git_sync_watchdog.py` as a silent-on-healthy, no-model Hermes cron job. It verifies that the private operational repository is clean and synchronized without automatically committing, pulling, pushing, resetting, or editing memory.
+The full runbook also installs `scripts/agent_brain_git_sync_watchdog.py` as a silent-on-healthy, no-model Hermes cron job. It uses networked `git fetch`, which updates Git metadata and remote-tracking refs, then verifies that the private operational repository is clean and synchronized without automatically committing, pulling, pushing, resetting, or editing memory.

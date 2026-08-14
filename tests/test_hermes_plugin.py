@@ -199,6 +199,8 @@ class HermesPluginCase(unittest.TestCase):
         status = json.loads(recall({"action": "status"}))
         self.assertTrue(status["ok"])
         self.assertEqual(status["status"]["integrity"], "ok")
+        self.assertNotIn("root", status["status"])
+        self.assertNotIn(str(self.root), json.dumps(status))
         self.assertLessEqual(len(json.dumps(context).encode()), 8192)
 
     def test_read_tool_rejects_unknown_or_unbounded_arguments(self) -> None:
@@ -237,6 +239,8 @@ class HermesPluginCase(unittest.TestCase):
         approval = self.plugin.plugin.pre_tool_call("agent_brain_remember", args)
         self.assertEqual(approval["action"], "approve")
         self.assertRegex(approval["rule_key"], r"^agent_brain_remember:[0-9a-f]{64}$")
+        self.assertIn("model-proposed capture", approval["message"])
+        self.assertIn("Verify that the current user directly stated", approval["message"])
         self.assertIn(args["title"], approval["message"])
         self.assertIn(args["content"], approval["message"])
         self.assertIn(approval["rule_key"].split(":", 1)[1], approval["message"])
@@ -251,6 +255,7 @@ class HermesPluginCase(unittest.TestCase):
         self.assertEqual(written["memory"]["status"], "pending_review")
         self.assertTrue((self.root / "brain" / written["memory"]["path"]).is_file())
         self.assertEqual(self.brain.search("synthetic compact reporting format"), [])
+        self.assertTrue(self.brain.verify()["ok"])
         self.assertIsNone(
             self.plugin.plugin.pre_llm_call(
                 user_message="What do we know about the synthetic compact reporting format?"
@@ -438,6 +443,23 @@ class HermesPluginCase(unittest.TestCase):
         self.assertNotEqual(refused.returncode, 0)
         self.assertTrue(target.is_symlink())
         self.assertEqual(list(outside.iterdir()), [])
+
+        real_parent = self.base / "resolved-parent"
+        real_parent.mkdir()
+        alias_parent = self.base / "parent-alias"
+        alias_parent.symlink_to(real_parent, target_is_directory=True)
+        aliased_home = alias_parent / "hermes-home"
+        aliased_env = {**os.environ, "HERMES_HOME": str(aliased_home)}
+        subprocess.run(
+            [sys.executable, str(INSTALLER)], env=aliased_env, text=True, capture_output=True, check=True
+        )
+        resolved_target = real_parent / "hermes-home" / "plugins" / "agent-brain"
+        self.assertTrue(resolved_target.is_dir())
+        subprocess.run(
+            [sys.executable, str(INSTALLER), "--uninstall"],
+            env=aliased_env, text=True, capture_output=True, check=True,
+        )
+        self.assertFalse(resolved_target.exists())
 
 
 if __name__ == "__main__":

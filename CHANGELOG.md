@@ -7,6 +7,7 @@
 - Added an agent-executable Hermes implementation runbook covering private operational forks, configuration, live verification, trust boundaries, profile isolation, rollback, and completion gates.
 - Added a generic silent-on-healthy Git synchronization watchdog plus scheduling instructions matching the reference operational deployment.
 - Added synthetic integration, installer, routing, citation, approval, quarantine, and profile-home tests.
+- Hardened quarantined-page verification, status-path privacy, write-approval wording, watchdog failure handling, symlink-ancestor portability, and noninteractive Hermes setup instructions after adversarial review.
 
 ## 0.2.0 — 2026-08-13
 

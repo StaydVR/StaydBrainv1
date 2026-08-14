@@ -491,7 +491,8 @@ def pre_tool_call(tool_name: str = "", args: dict | None = None, **kwargs):
     return {
         "action": "approve",
         "message": (
-            "Approve this exact direct-user capture in local Agent Brain?\n"
+            "Approve this model-proposed capture in local Agent Brain? Verify that the current user "
+            "directly stated or requested this exact durable fact.\n"
             f"Title: {validated['title']}\n"
             f"Tags: {tags_text}\n"
             f"Content:\n{validated['content']}\n"

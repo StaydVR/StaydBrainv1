@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -74,6 +75,15 @@ class GitSyncWatchdogTests(unittest.TestCase):
         output = self.run_watchdog(self.base / "missing")
         self.assertIn("configured repository is missing", output)
         self.assertNotIn(str(self.base), output)
+
+    def test_runtime_git_failure_emits_one_bounded_alert_without_raising(self) -> None:
+        with mock.patch.object(self.watchdog, "_git", side_effect=RuntimeError("synthetic failure")):
+            output = self.run_watchdog(self.repo)
+        self.assertEqual(
+            output,
+            "⚠️ Agent Brain Git sync watchdog error: local Git check failed safely.\n",
+        )
+        self.assertNotIn("synthetic failure", output)
 
 
 if __name__ == "__main__":

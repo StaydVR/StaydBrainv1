@@ -55,50 +55,49 @@ def main(root: Path | None = None) -> int:
     except (OSError, RuntimeError):
         print("⚠️ Agent Brain Git sync check failed: configured repository is missing.")
         return 0
+    try:
+        inside = _git(repo, "rev-parse", "--is-inside-work-tree")
+        if inside.returncode != 0 or inside.stdout.strip() != "true":
+            print("⚠️ Agent Brain Git sync check failed: configured root is not a Git repository.")
+            return 0
 
-    inside = _git(repo, "rev-parse", "--is-inside-work-tree")
-    if inside.returncode != 0 or inside.stdout.strip() != "true":
-        print("⚠️ Agent Brain Git sync check failed: configured root is not a Git repository.")
+        remote = os.environ.get("AGENT_BRAIN_GIT_REMOTE", "origin")
+        branch_result = _git(repo, "branch", "--show-current")
+        branch = os.environ.get("AGENT_BRAIN_GIT_BRANCH") or branch_result.stdout.strip()
+        if branch_result.returncode != 0 or not branch:
+            print("⚠️ Agent Brain Git sync check failed: unable to determine the current branch.")
+            return 0
+
+        fetched = _git(repo, "fetch", remote, branch, "--prune")
+        if fetched.returncode != 0:
+            print("⚠️ Agent Brain Git sync check failed: remote fetch failed.")
+            return 0
+
+        status = _git(repo, "status", "--porcelain=v1", "--untracked-files=all")
+        counts = _git(repo, "rev-list", "--left-right", "--count", f"HEAD...{remote}/{branch}")
+        values = counts.stdout.split()
+        if status.returncode != 0 or counts.returncode != 0 or len(values) != 2:
+            print("⚠️ Agent Brain Git sync check failed: unable to compare local and remote state.")
+            return 0
+
+        ahead, behind = (int(value) for value in values)
+        changes = status.stdout.splitlines()
+        if not changes and ahead == 0 and behind == 0:
+            return 0
+
+        parts: list[str] = []
+        if changes:
+            parts.append(f"{len(changes)} uncommitted change(s)")
+        if ahead:
+            parts.append(f"{ahead} commit(s) not pushed")
+        if behind:
+            parts.append(f"{behind} remote commit(s) not pulled")
+        print("⚠️ Agent Brain Git sync needs attention: " + "; ".join(parts) + ".")
         return 0
-
-    remote = os.environ.get("AGENT_BRAIN_GIT_REMOTE", "origin")
-    branch_result = _git(repo, "branch", "--show-current")
-    branch = os.environ.get("AGENT_BRAIN_GIT_BRANCH") or branch_result.stdout.strip()
-    if branch_result.returncode != 0 or not branch:
-        print("⚠️ Agent Brain Git sync check failed: unable to determine the current branch.")
+    except (OSError, RuntimeError, subprocess.SubprocessError, ValueError):
+        print("⚠️ Agent Brain Git sync watchdog error: local Git check failed safely.")
         return 0
-
-    fetched = _git(repo, "fetch", remote, branch, "--prune")
-    if fetched.returncode != 0:
-        print("⚠️ Agent Brain Git sync check failed: remote fetch failed.")
-        return 0
-
-    status = _git(repo, "status", "--porcelain=v1", "--untracked-files=all")
-    counts = _git(repo, "rev-list", "--left-right", "--count", f"HEAD...{remote}/{branch}")
-    values = counts.stdout.split()
-    if status.returncode != 0 or counts.returncode != 0 or len(values) != 2:
-        print("⚠️ Agent Brain Git sync check failed: unable to compare local and remote state.")
-        return 0
-
-    ahead, behind = (int(value) for value in values)
-    changes = status.stdout.splitlines()
-    if not changes and ahead == 0 and behind == 0:
-        return 0
-
-    parts: list[str] = []
-    if changes:
-        parts.append(f"{len(changes)} uncommitted change(s)")
-    if ahead:
-        parts.append(f"{ahead} commit(s) not pushed")
-    if behind:
-        parts.append(f"{behind} remote commit(s) not pulled")
-    print("⚠️ Agent Brain Git sync needs attention: " + "; ".join(parts) + ".")
-    return 0
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as exc:
-        print(f"⚠️ Agent Brain Git sync watchdog error: {type(exc).__name__}.")
-        raise
+    raise SystemExit(main())
