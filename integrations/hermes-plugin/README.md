@@ -87,9 +87,9 @@ Approved captures are written as `pending_review`. They remain excluded from sea
 The installer copies into the `HERMES_HOME` supplied to the process. Runtime configuration resolves through Hermes's active profile-home resolver. For named profiles, install and configure the same profile home; do not assume the default `~/.hermes` path.
 
 ```sh
-PROFILE_NAME="my-profile"
-HERMES_HOME="$HOME/.hermes/profiles/$PROFILE_NAME" \
-  python3.11 scripts/install_hermes_plugin.py
+export PROFILE_NAME="my-profile"
+export PROFILE_HOME="$(dirname "$(hermes --profile "$PROFILE_NAME" config path)")"
+HERMES_HOME="$PROFILE_HOME" python3.11 scripts/install_hermes_plugin.py
 hermes --profile "$PROFILE_NAME" config set --force agent_brain.root "$BRAIN_ROOT"
 hermes --profile "$PROFILE_NAME" plugins enable agent-brain --no-allow-tool-override
 ```
@@ -97,8 +97,13 @@ hermes --profile "$PROFILE_NAME" plugins enable agent-brain --no-allow-tool-over
 ## Rollback
 
 ```sh
+# Default profile
 hermes plugins disable agent-brain
 python3.11 scripts/install_hermes_plugin.py --uninstall
+
+# Named profile — use these instead of the commands above
+hermes --profile "$PROFILE_NAME" plugins disable agent-brain
+HERMES_HOME="$PROFILE_HOME" python3.11 scripts/install_hermes_plugin.py --uninstall
 ```
 
 Disabling or uninstalling removes plugin behavior only. It does not change canonical `brain/` Markdown, the disposable index, Hermes config, native Hermes memory, or plugin data.

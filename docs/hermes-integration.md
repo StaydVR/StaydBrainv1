@@ -31,10 +31,12 @@ An operator can paste the following into a tool-enabled Hermes session from the 
 
 ```text
 Wire this Agent Brain checkout into my active Hermes profile using docs/hermes-integration.md.
-Keep my existing Hermes USER.md, MEMORY.md, config, providers, tools, and gateway settings intact.
+Keep my existing Hermes USER.md, MEMORY.md, configuration, providers, tools, installed plugins,
+and gateway settings intact; add only the Agent Brain plugin described here.
 Use a private/local operational Brain root, install the standalone agent-brain plugin, start with
-selective read-only recall, and verify the installed copy, explicit status tool, synthetic cited
-automatic recall, unrelated-prompt bypass, rollback path, and the live gateway if I use one.
+selective read-only recall, and verify the installed copy, explicit status tool, disposable synthetic
+cited recall, citation validity, rollback path, repository-tested bypass invariants, and the live
+gateway if I use one.
 Do not enable writes unless I explicitly request them. Do not report completion until the full
 repository verification passes and the live execution path has been tested.
 ```
@@ -47,8 +49,8 @@ Use this only after reading the security rules and confirming the operational Br
 
 ```sh
 # Run from the private/local operational Agent Brain checkout.
-BRAIN_ROOT="$(pwd -P)"
-HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
+export BRAIN_ROOT="$(pwd -P)"
+export HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 
 python3.11 -m venv .venv
 . .venv/bin/activate
@@ -67,7 +69,14 @@ hermes config set --force agent_brain.writes_enabled false
 hermes plugins enable agent-brain --no-allow-tool-override
 ```
 
-For a named profile, put `--profile PROFILE_NAME` immediately after `hermes` in every Hermes command and set `HERMES_HOME="$HOME/.hermes/profiles/PROFILE_NAME"` for installer commands. Start a fresh CLI process or restart the intended gateway, then continue through the live verification sections below. Never use the fast path as a substitute for those checks.
+For a named profile, put `--profile PROFILE_NAME` immediately after `hermes` in every Hermes command. Derive the installer home portably:
+
+```sh
+export PROFILE_NAME="my-profile"
+export HERMES_HOME="$(dirname "$(hermes --profile "$PROFILE_NAME" config path)")"
+```
+
+Start a fresh CLI process or restart the intended gateway, then continue through the live verification sections below. Never use the fast path as a substitute for those checks.
 
 ## Non-negotiable security rules
 
@@ -102,11 +111,19 @@ If current Hermes documentation conflicts with this repository, current Hermes d
 
 ## 1. Prepare a private operational Brain
 
-Do not use the public upstream checkout as a destination for private memory unless it will remain local and its private changes can never be pushed upstream. A clean pattern is a private fork or a local clone with a separate private origin.
+Do not use a shared/public source checkout as the operational push destination for private memory. Clone the code, inspect the inherited remote, and choose **before initialization or first capture**:
 
 ```sh
 git clone <agent-brain-repository-url> my-private-brain
 cd my-private-brain
+git remote -v
+```
+
+For a local-only Brain, run `git remote remove origin` and verify `git remote -v` is empty. For a Git-backed Brain, change `origin` only after the operator approves the destination, then verify its URL and `PRIVATE` visibility with the authenticated Git host API/UI. Never infer privacy from a repository name or URL.
+
+After that storage gate passes:
+
+```sh
 python3.11 -m venv .venv
 . .venv/bin/activate
 python -m pip install -e .
@@ -118,7 +135,7 @@ agent-brain --root "$(pwd -P)" verify
 If the repository already contains an initialized Brain, `init` is idempotent. Record the exact root:
 
 ```sh
-BRAIN_ROOT="$(pwd -P)"
+export BRAIN_ROOT="$(pwd -P)"
 printf '%s\n' "$BRAIN_ROOT"
 ```
 
@@ -163,7 +180,8 @@ HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 Named profile:
 
 ```sh
-HERMES_HOME="$HOME/.hermes/profiles/PROFILE_NAME"
+export PROFILE_NAME="my-profile"
+export HERMES_HOME="$(dirname "$(hermes --profile "$PROFILE_NAME" config path)")"
 ```
 
 Use the profile that runs the intended CLI or gateway. The installer uses `HERMES_HOME` to choose the copy destination. At runtime, the plugin asks Hermes for the active profile home and reads that profile's `config.yaml`.
@@ -248,33 +266,19 @@ root_valid=true auto_recall=true routing_mode=selective writes_enabled=false
 
 Also verify the explicit read tool with `action: status`. The returned Brain status must report healthy integrity.
 
-## 7. Run a synthetic end-to-end recall test
+## 7. Run a disposable synthetic end-to-end recall test
 
-Use synthetic content only in a public or test repository:
+Do not run the direct `remember` CLI against the operational Brain merely to test read-only setup: it creates an immediately active page. Follow the README's [disposable synthetic recall procedure](../README.md#2-prove-cited-automatic-recall-without-writing-to-the-operational-brain). That procedure:
 
-```sh
-agent-brain --root "$BRAIN_ROOT" remember \
-  "Synthetic rollout decision" \
-  "The synthetic rollout uses a blue-green verification checkpoint."
-```
+1. builds a temporary Brain from reviewed source only;
+2. writes the active synthetic fixture only there;
+3. temporarily points the same Hermes profile at that root;
+4. proves live search, automatic recall, and citation verification;
+5. restores the operational root and deletes the temporary Brain.
 
-Start a fresh Hermes process and ask:
+Live observable pass criteria are a healthy plugin status, an answer using the synthetic fact with a `brain/pages/...` source, an explicit `search` result, and `verify_citation` returning `valid: true` and `stale: false` for the complete returned citation object.
 
-```text
-What did we decide about the synthetic rollout? Include the source path.
-```
-
-Pass criteria:
-
-- response uses the synthetic fact;
-- evidence includes a `brain/pages/...` citation;
-- injected context is labeled `UNTRUSTED MEMORY EVIDENCE`;
-- only bounded JSON-quoted snippets are injected; no complete page body is intentionally requested or injected as a document;
-- no unrelated prompt receives automatic memory context;
-- a no-match query injects nothing;
-- recall failure does not break an otherwise normal Hermes response.
-
-Unit tests cover routing negatives, bounds, citation structure, profile isolation, and fail-open/fail-closed behavior. A live test proves the installed copy and current Hermes lifecycle still agree.
+The hidden hook payload's untrusted label, byte bound, unrelated/no-match bypass, and fail-open behavior are implementation-tested invariants covered by `make verify`; a normal chat does not expose that payload. Do not claim those properties were visually observed unless the installed Hermes version provides a safe hook diagnostic.
 
 ## 8. Understand the read interface
 
@@ -292,14 +296,17 @@ All outputs are compact JSON and identify the trust boundary as `untrusted_memor
 
 Writes are optional. Keep them disabled unless the operator explicitly wants Hermes-assisted capture.
 
-To enable, change only:
+To enable, change only the configured profile's write flag. Use one command:
 
-```yaml
-agent_brain:
-  writes_enabled: true
+```sh
+# Default profile
+hermes config set --force agent_brain.writes_enabled true
+
+# Named profile — use this instead of the command above
+hermes --profile "$PROFILE_NAME" config set --force agent_brain.writes_enabled true
 ```
 
-Then restart Hermes and verify `agent_brain_remember` appears.
+Then restart that same Hermes execution path and verify `agent_brain_remember` appears.
 
 Every model-proposed write call must include:
 
@@ -366,11 +373,17 @@ If Obsidian is used as the editor, open only the private/local operational repos
 
 ## 11. Roll back safely
 
-Immediate behavior rollback:
+Immediate behavior rollback; use the command for the configured profile:
 
 ```sh
+# Default profile
 hermes plugins disable agent-brain
+
+# Named profile — use this instead of the command above
+hermes --profile "$PROFILE_NAME" plugins disable agent-brain
 ```
+
+Restart that execution path and prove the command/tools are absent. Re-enable the same profile, restart again, and require `/agent-brain status` plus recall verification to pass before reporting the integration restored.
 
 Code removal:
 
@@ -393,21 +406,21 @@ Restart the affected CLI/gateway and verify normal Hermes behavior after rollbac
 
 A Hermes agent may report completion only after all applicable checks pass:
 
-- [ ] Operational Brain is local/private and its root is resolved and non-symlink.
+- [ ] Operational Brain is local/private, its root is resolved/non-symlink, and remote state/visibility was explicitly reviewed.
 - [ ] Public upstream contains no private data, identifiers, credentials, or local paths.
-- [ ] `make verify` passes before installation.
+- [ ] `make verify` passes before installation, including hook labeling, boundedness, bypass, and fail-open tests.
 - [ ] Plugin source was inspected and installed atomically.
 - [ ] `scripts/install_hermes_plugin.py --check` passes for the intended profile.
 - [ ] Config was patched without overwriting unrelated settings.
 - [ ] Fresh Hermes process reports `/agent-brain status` with `root_valid=true`.
 - [ ] Explicit read-tool status reports healthy Brain integrity.
-- [ ] Synthetic history-dependent recall returns a current citation.
-- [ ] Unrelated and no-match prompts do not receive recall context.
+- [ ] Disposable synthetic recall returns a citation whose full object verifies as `valid: true`, `stale: false`.
+- [ ] Operational root was restored and the disposable synthetic Brain was removed.
 - [ ] Writes remain disabled unless explicitly requested.
 - [ ] If writes are enabled, exact-payload approval and `pending_review` exclusion are proven.
 - [ ] Long-running gateway was independently restarted and verified, when used.
 - [ ] If Git monitoring was requested, the watchdog was copied into the intended profile, manually run, scheduled, and its durable run result inspected.
-- [ ] Disable/uninstall rollback path was tested or mechanically verified.
+- [ ] Disable/restart/prove-absence/re-enable/restart/status-and-recall rollback round trip passed for the intended profile.
 - [ ] Repository changes are committed, pushed, and remote visibility is correct before claiming delivery.
 
 ## Common mistakes
