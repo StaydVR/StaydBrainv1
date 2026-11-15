@@ -14,10 +14,13 @@ from .server import serve
 
 
 def parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="agent-brain", description="Local, security-first agent memory")
+    p = argparse.ArgumentParser(prog="staydbrain", description="Local, security-first agent memory")
     p.add_argument("--root", default=".", help="repository root")
     sub = p.add_subparsers(dest="command", required=True)
     sub.add_parser("init")
+    sub.add_parser("schedule")
+    nightly = sub.add_parser("nightly")
+    nightly.add_argument("--fake", action="store_true", help="explicit synthetic demo adapter")
     remember = sub.add_parser("remember", aliases=["capture"])
     remember.add_argument("title"); remember.add_argument("content"); remember.add_argument("--type", default="note")
     remember.add_argument("--tag", action="append", default=[])
@@ -53,6 +56,14 @@ def execute(args: argparse.Namespace) -> Any:
     if args.command == "init":
         return Brain.init(args.root).status()
     brain = Brain(args.root)
+    if args.command == "schedule":
+        from .nightly import next_run
+        from datetime import datetime, UTC
+        config = brain.config()
+        return {"time": config.nightly_time, "timezone": config.nightly_timezone, "next_run": next_run(config, datetime.now(UTC)).isoformat()}
+    if args.command == "nightly":
+        from .nightly import run_nightly, FakeOpsAdapter
+        return run_nightly(brain, (FakeOpsAdapter(),) if args.fake else ())
     if args.command in {"remember", "capture"}: return brain.remember(args.title, args.content, page_type=args.type, tags=args.tag)
     if args.command in {"search", "recall"}: return brain.search(args.query, args.limit)
     if args.command == "entity": return brain.entity(args.id)

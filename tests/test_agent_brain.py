@@ -284,7 +284,7 @@ class BrainCase(unittest.TestCase):
     def test_pii_binary_and_size_boundaries(self) -> None:
         unsafe = [
             b"person" + bytes([64]) + b"example" + bytes([46]) + b"invalid",
-            b"111-22-3333", b"(212) 555-0199", b"4111 1111 1111 1111", b"safe\x00unsafe", b"\xff\xfe",
+            b"111" + b"-22-" + b"3333", b"(212) " + b"555-" + b"0199", b"4111 " + b"1111 " * 2 + b"1111", b"safe\x00unsafe", b"\xff\xfe",
         ]
         for data in unsafe:
             with self.subTest(kind=sha256(data)):

@@ -1,6 +1,6 @@
 .PHONY: test static benchmark verify demo
 
-PYTHON ?= $(shell command -v python3.11 2>/dev/null || command -v python3)
+PYTHON ?= $(shell command -v python3.11 2>/dev/null || command -v python3.12 2>/dev/null || command -v python3)
 export PYTHONPATH := src
 export PYTHONPYCACHEPREFIX := /tmp/agent-brain-pycache
 
