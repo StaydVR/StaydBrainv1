@@ -341,35 +341,10 @@ A human must inspect the canonical Markdown page. If it is accurate, declarative
 
 The plugin intentionally exposes no promotion, edit, forget, or delete tool.
 
-## 10. Add optional Git synchronization monitoring
+## 10. Local nightly maintenance
 
-The plugin reads canonical files but does not synchronize Git. If the operational Brain has a private remote, install the included silent-on-healthy watchdog into the same Hermes profile:
-
-```sh
-mkdir -p "$HERMES_HOME/scripts"
-install -m 0700 scripts/agent_brain_git_sync_watchdog.py \
-  "$HERMES_HOME/scripts/agent_brain_git_sync_watchdog.py"
-
-# Direct smoke test. Healthy state produces no output and exits zero.
-HERMES_HOME="$HERMES_HOME" python3.11 \
-  "$HERMES_HOME/scripts/agent_brain_git_sync_watchdog.py"
-```
-
-The script resolves the Brain root from the installed plugin configuration, runs a status comparison after `git fetch`, remains silent when clean/synchronized, and emits a short alert for uncommitted, unpushed, behind, missing-repository, or fetch-failure states. It is memory read-only but networked: `git fetch` contacts the approved remote and updates local Git fetch metadata and remote-tracking refs. It never commits, pulls, pushes, resets, or edits memory. Keep this optional and point it only at a remote the operator approved.
-
-A Hermes agent can schedule it as a no-model watchdog. The reference deployment uses 3:30 AM local time daily:
-
-```sh
-hermes cron create "30 3 * * *" \
-  --name "Agent Brain daily Git sync check" \
-  --script agent_brain_git_sync_watchdog.py \
-  --no-agent \
-  --deliver origin
-```
-
-When creating the job from a Hermes chat, `origin` returns alerts to that conversation. From a standalone terminal, choose an actually connected delivery target such as `telegram`, `slack`, or `platform:chat_id`; do not assume a local CLI has a useful chat origin. Run the job once, inspect its durable run result, and confirm a clean repository is silent. Do not claim success merely because the run was dispatched.
-
-If Obsidian is used as the editor, open only the private/local operational repository as the vault. Review any community Git plugin before enabling it, keep device/workspace/plugin state ignored, and use Git auto-pull/push only as a convenience layer. The independent watchdog is still the health signal. Never point Obsidian automation at the public upstream when the vault contains private memory.
+Use the configurable local adapter pipeline in [INTERFACES.md](INTERFACES.md).
+The engine installs no networked repository-monitoring or synchronization job.
 
 ## 11. Roll back safely
 
@@ -419,7 +394,6 @@ A Hermes agent may report completion only after all applicable checks pass:
 - [ ] Writes remain disabled unless explicitly requested.
 - [ ] If writes are enabled, exact-payload approval and `pending_review` exclusion are proven.
 - [ ] Long-running gateway was independently restarted and verified, when used.
-- [ ] If Git monitoring was requested, the watchdog was copied into the intended profile, manually run, scheduled, and its durable run result inspected.
 - [ ] Disable/restart/prove-absence/re-enable/restart/status-and-recall rollback round trip passed for the intended profile.
 - [ ] Repository changes are committed, pushed, and remote visibility is correct before claiming delivery.
 

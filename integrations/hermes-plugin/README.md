@@ -107,7 +107,3 @@ HERMES_HOME="$PROFILE_HOME" python3.11 scripts/install_hermes_plugin.py --uninst
 ```
 
 Disabling or uninstalling removes plugin behavior only. It does not change canonical `brain/` Markdown, the disposable index, Hermes config, native Hermes memory, or plugin data.
-
-## Optional Git health check
-
-The full runbook also installs `scripts/agent_brain_git_sync_watchdog.py` as a silent-on-healthy, no-model Hermes cron job. It uses networked `git fetch`, which updates Git metadata and remote-tracking refs, then verifies that the private operational repository is clean and synchronized without automatically committing, pulling, pushing, resetting, or editing memory.

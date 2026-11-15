@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
+import re
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,18 +12,22 @@ from .errors import ValidationError
 from .util import atomic_write, json_bytes, reject_symlink_chain
 
 
-DEFAULT_CONFIG = """# Agent Brain v0.2 configuration
+DEFAULT_CONFIG = """# StaydBrain configuration
 version = 1
 max_ingest_bytes = 1048576
 stale_after_days = 90
 max_archive_files = 256
 max_archive_bytes = 8388608
 allowlisted_roots = []
+nightly_time = "04:00"
+nightly_timezone = "America/New_York"
 """
 
 
 @dataclass(frozen=True)
 class Config:
+    nightly_time: str = "04:00"
+    nightly_timezone: str = "America/New_York"
     version: int = 1
     max_ingest_bytes: int = 1_048_576
     stale_after_days: int = 90
@@ -37,10 +44,12 @@ class Config:
             if path.stat().st_size > 65_536:
                 raise ValidationError("config is too large")
             raw = tomllib.loads(path.read_text(encoding="utf-8"))
-            allowed = {"version", "max_ingest_bytes", "stale_after_days", "max_archive_files", "max_archive_bytes", "allowlisted_roots"}
+            allowed = {"version", "max_ingest_bytes", "stale_after_days", "max_archive_files", "max_archive_bytes", "allowlisted_roots", "nightly_time", "nightly_timezone"}
             if set(raw) - allowed:
                 raise ValidationError("unknown config keys")
             value = cls(
+                nightly_time=os.environ.get("STAYDBRAIN_NIGHTLY_TIME", raw.get("nightly_time", "04:00")),
+                nightly_timezone=os.environ.get("STAYDBRAIN_NIGHTLY_TIMEZONE", raw.get("nightly_timezone", "America/New_York")),
                 version=int(raw.get("version", 1)),
                 max_ingest_bytes=int(raw.get("max_ingest_bytes", 1_048_576)),
                 stale_after_days=int(raw.get("stale_after_days", 90)),
@@ -55,6 +64,12 @@ class Config:
                 or not 1 <= value.max_archive_files <= 10_000
                 or not value.max_ingest_bytes <= value.max_archive_bytes <= 256 * 1024 * 1024):
             raise ValidationError("unsupported or invalid config values")
+        if not isinstance(value.nightly_time, str) or not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", value.nightly_time):
+            raise ValidationError("invalid nightly time")
+        try:
+            ZoneInfo(value.nightly_timezone)
+        except (ZoneInfoNotFoundError, ValueError, TypeError) as exc:
+            raise ValidationError("invalid nightly timezone") from exc
         for item in value.allowlisted_roots:
             candidate = Path(item)
             if (not candidate.is_absolute() or "\x00" in item or candidate.is_symlink()

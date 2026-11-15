@@ -234,7 +234,7 @@ class Brain:
         if tier != "tracked":
             return False
         parts = path.relative_to(self.root).parts
-        return len(parts) >= 2 and parts[0] == "brain" and parts[1] in {"pages", "sources"}
+        return len(parts) >= 2 and parts[0] == "brain" and parts[1] in {"pages", "sources", "Journal", "Meetings"}
 
     def _populate(self, conn: sqlite3.Connection, parsed: list[tuple[Path, str, markdown.Document, str]], rebuild: bool) -> None:
         slug_ids = {str(doc.meta["slug"]): str(doc.meta["id"]) for _, _, doc, _ in parsed}
