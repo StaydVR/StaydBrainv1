@@ -111,7 +111,7 @@ Source layout:
 
 ## Quickstart and versions
 
-**Version note.** GitHub release tag `v0.1.0` is the first StaydBrain release. It was built from commit `6467011`. The wheel attached to that release is **`staydbrain-0.2.0-py3-none-any.whl`**, and `staydbrain.__version__` / `pip show staydbrain` both report **0.2.0**. The package version came from the upstream codebase StaydBrain was forked from, and the `0.2.0` entry in [CHANGELOG.md](CHANGELOG.md) describes that upstream release. The release tag and the package version are different numbers but the same code. Use the tag to pick a release and the package version for pip.
+**Version note.** GitHub release tag `v0.1.0` is the first StaydBrain release. It was built from commit `6467011`. The wheel attached to that release is **`staydbrain-0.2.0-py3-none-any.whl`**, and `agent_brain.__version__` / `pip show staydbrain` both report **0.2.0**. The package version came from the upstream codebase StaydBrain was forked from, and the `0.2.0` entry in [CHANGELOG.md](CHANGELOG.md) describes that upstream release. The release tag and its attached wheel use different version numbers. The current main branch includes later changes without a package version bump; build from the source checkout for the nightly pipeline documented here. Use the tag to pick that historical release and the package version for pip.
 
 Requirements: Python **3.11 or newer** (it uses `tomllib` and `datetime.UTC`). No runtime dependencies.
 
