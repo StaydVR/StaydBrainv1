@@ -94,11 +94,9 @@ canonical/index/report writes (security rejection may write hash-only metadata).
 Nightly additionally writes `brain/reports/contradictions-YYYY-MM-DD.md` containing
 pre-repair contradictions, applied repair slugs, and review reasons. Facts use
 `- fact: subject | predicate | object`; conflicting objects are never guessed away.
-Repairs require trusted host classification via the `maintenance-safe` tag.
-Unclassified pages are flagged. People/contact/operator, money/financial, legal,
-and tax terms are a further veto even on opted-in pages. Hosts must never label
-sensitive or mixed-domain pages maintenance-safe. No name/entity inference is
-claimed; default review protects unclassified content.
+Repairs run on every ordinary page. People/contact/operator, money/financial, legal,
+and tax terms veto an edit. No name/entity inference is claimed; sensitive pages
+stay unchanged for human review.
 
 Only these bounded operations are automatic on eligible non-sensitive pages:
 
@@ -147,7 +145,7 @@ require explicit `serve --allow-write` on a trusted local channel.
 | Current Work / Decision History | Dated operational summary pages |
 | Stale-page review | pending_review metadata |
 | Dream review | Deterministic report, contradictions and bounded maintenance |
-| Human review | Sensitive/unclassified findings remain unresolved |
+| Human review | Sensitive findings remain unresolved |
 
 The read-only reference's allowed scripts/docs/skills exposed the dream-review
 pattern and folder layout, but no nightly sync prompt/config was found there.

@@ -52,13 +52,13 @@ class NightlyTests(unittest.TestCase):
         self.assertTrue(self.brain.search('mock filter'))
 
     def test_easy_repairs_and_sensitive_review(self):
-        self.brain.remember('Filter checklist', 'Synthetic filter procedure', page_id='filter-v2', tags=('maintenance-safe',))
-        self.brain.remember('Broken reference', 'See [[filter-checklist]]', tags=('maintenance-safe',))
-        self.brain.remember('Duplicate A', 'Identical synthetic procedure', tags=('maintenance-safe',))
-        self.brain.remember('Duplicate B', 'Identical synthetic procedure', tags=('maintenance-safe',))
+        self.brain.remember('Filter checklist', 'Synthetic filter procedure', page_id='filter-v2')
+        self.brain.remember('Broken reference', 'See [[filter-checklist]]')
+        self.brain.remember('Duplicate A', 'Identical synthetic procedure')
+        self.brain.remember('Duplicate B', 'Identical synthetic procedure')
         verified = []
         for label in ['equipment', 'people', 'money', 'legal', 'tax']:
-            self.brain.remember(label, f'- fact: {label} | state | old', tags=('maintenance-safe',))
+            self.brain.remember(label, f'- fact: {label} | state | old')
             path = self.brain.brain_dir / f'pages/{label}.md'
             verified.append(VerifiedFact(label, sha256(path.read_bytes()), 'old', 'new', 'Synthetic authoritative checklist'))
         sensitive = {label: (self.brain.brain_dir / f'pages/{label}.md').read_bytes() for label in ['people', 'money', 'legal', 'tax']}
@@ -99,13 +99,20 @@ class NightlyTests(unittest.TestCase):
         repair_easy(self.brain, (VerifiedFact('equipment', 'wrong', 'old', 'new', 'proof'),), self.day)
         self.assertEqual(path.read_bytes(), before)
 
-    def test_unknown_domain_and_sensitive_proof_stay_unchanged(self):
-        self.brain.remember('Unknown', 'old')
-        self.brain.remember('Machine', 'old', tags=('maintenance-safe',))
-        before = self.brain.canonical_hashes()
+    def test_untagged_fact_is_applied_and_sensitive_proof_is_not(self):
+        self.brain.remember('Unknown', 'old value')
+        self.brain.remember('Machine', 'old setting')
+        unknown = self.brain.brain_dir / 'pages/unknown.md'
         machine = self.brain.brain_dir / 'pages/machine.md'
-        repair_easy(self.brain, (VerifiedFact('machine', sha256(machine.read_bytes()), 'old', 'new', 'tax evidence'),), self.day)
-        self.assertEqual(before, self.brain.canonical_hashes())
+        machine_before = machine.read_bytes()
+        result = repair_easy(self.brain, (
+            VerifiedFact('unknown', sha256(unknown.read_bytes()), 'old value', 'new value', 'Synthetic checklist'),
+            VerifiedFact('machine', sha256(machine.read_bytes()), 'old setting', 'new setting', 'tax evidence'),
+        ), self.day)
+        self.assertIn('new value', unknown.read_text())
+        self.assertIn('unknown', result['applied'])
+        self.assertEqual(machine.read_bytes(), machine_before)
+        self.assertIn({'slug': 'machine', 'reason': 'sensitive-verification'}, result['human_review'])
 
     def test_output_collision_and_bad_meeting(self):
         from agent_brain.nightly import Meeting

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Nightly auto-fix now repairs every non-sensitive page. The `maintenance-safe` tag is no longer required.
 - Added a standalone, profile-aware Hermes plugin with selective bounded recall, explicit read tools, optional exact-payload-approved capture, and reversible installation.
 - Added `pending_review` capture status and excluded all inactive pages from retrieval indexes, vocabulary, facts, and relations until human promotion.
 - Added an agent-executable Hermes implementation runbook covering private operational forks, configuration, live verification, trust boundaries, profile isolation, rollback, and completion gates.

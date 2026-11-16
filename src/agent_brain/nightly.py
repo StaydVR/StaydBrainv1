@@ -164,9 +164,6 @@ def repair_easy(brain: Brain, verified: tuple[VerifiedFact, ...], day: date) -> 
         if SENSITIVE.search(text):
             review.append({"slug": slug, "reason": "sensitive-domain"})
             continue
-        if "maintenance-safe" not in doc.meta.get("tags", []):
-            review.append({"slug": slug, "reason": "unclassified-domain"})
-            continue
         body = doc.body
         # Only repair an unresolved link when its casefolded title uniquely identifies a page.
         def fix_link(match):
@@ -174,7 +171,6 @@ def repair_easy(brain: Brain, verified: tuple[VerifiedFact, ...], day: date) -> 
             if target in slugs:
                 return match.group(0)
             candidates = [s for s, (_, d, _) in slugs.items() if Brain.slug(str(d.meta["title"])) == target
-                          and "maintenance-safe" in d.meta.get("tags", [])
                           and not SENSITIVE.search(render(d.meta, d.body))]
             if len(candidates) == 1:
                 return match.group(0).replace("[[" + target, "[[" + candidates[0], 1)

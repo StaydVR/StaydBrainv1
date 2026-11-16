@@ -21,8 +21,7 @@ Set up StaydBrain (https://github.com/StaydVR/StaydBrainv1, private repo) on thi
    `staydbrain --root ./demo-output schedule` JSON, and the make verify summary line ("Ran N tests ... OK").
 
 Rules: do not schedule cron/launchd/systemd jobs, do not write real personal, customer, or financial data
-into the brain, do not tag any page `maintenance-safe` unless I ask, do not commit or push, and stop and
-report the exact error text if any step fails.
+into the brain, do not commit or push, and stop and report the exact error text if any step fails.
 ```
 
 The agent, or a person, then follows the exact steps in [Agent setup](#agent-setup). The short version:
@@ -361,13 +360,12 @@ Reviewing a `pending_review` page: either edit its frontmatter back to `status: 
 
 ## Auto-fix guardrails
 
-The nightly pass has three automatic edits, and each one applies only to pages that you have opted in.
+The nightly pass repairs ordinary pages by default. No opt-in tag is required.
 
-**Which pages are eligible.** A page under `brain/` qualifies only if all of these hold:
+**Which pages are eligible.** A page under `brain/` is repaired unless either of these holds:
 
-1. It is not a report (`type: dream-report`) or a nightly output (`type: ops-sync`).
-2. It has the tag **`maintenance-safe`**, for example `staydbrain remember "Title" "Body" --tag maintenance-safe`, or `tags: [maintenance-safe]` in its frontmatter. Untagged pages are listed with reason `unclassified-domain`.
-3. Its full text, including the frontmatter, does not match the **sensitive-domain list**: `person, people, contact, operator, owner, employee, guest, money, price, cost, payment, salary, budget, invoice, revenue, financial, bank, legal, contract, tax, taxes, law, liability`, or any `$`, `€`, or `£` symbol (whole words, any case). Matching pages are listed with reason `sensitive-domain`. **The sensitive check wins even when the tag is present.**
+1. It is a report (`type: dream-report`) or a nightly output (`type: ops-sync`).
+2. Its full text, including the frontmatter, matches the **sensitive-domain list**: `person, people, contact, operator, owner, employee, guest, money, price, cost, payment, salary, budget, invoice, revenue, financial, bank, legal, contract, tax, taxes, law, liability`, or any `$`, `€`, or `£` symbol (whole words, any case). Matching pages are listed with reason `sensitive-domain` and are not edited.
 
 **What it will do** (eligible pages only):
 
@@ -377,16 +375,11 @@ The nightly pass has three automatic edits, and each one applies only to pages t
 
 Every changed file is scanned again, written atomically, and audited by hash.
 
-**What it will never do:** delete a file, merge pages, resolve a contradiction, edit a sensitive or untagged page, edit nightly outputs or reports, infer who a person or entity is, or call a model.
+**What it will never do:** delete a file, merge pages, resolve a contradiction, edit a sensitive page, edit nightly outputs or reports, infer who a person or entity is, or call a model.
 
-**Held for a human.** Each nightly `repairs.human_review` list, also saved in `contradictions-<day>.md`, names every page that was skipped and why (`sensitive-domain`, `unclassified-domain`, `sensitive-verification`). Contradictions, broken links that could not be resolved, duplicate candidates, stale pages, and orphans are listed in the dream report.
+**Held for a human.** Each nightly `repairs.human_review` list, also saved in `contradictions-<day>.md`, names every page that was skipped and why (`sensitive-domain`, `sensitive-verification`). Contradictions, broken links that could not be resolved, duplicate candidates, stale pages, and orphans are listed in the dream report.
 
-**Keeping auto-fix off.** It is off by default. No page is eligible until you tag it `maintenance-safe`, and there is no global switch to turn on. For zero automatic edits:
-
-- Never tag pages `maintenance-safe` (and do not let agents do it), and do not return `verified_facts` from adapters. `nightly` will still file the day's outputs and mark stale pages.
-- If you want reports only, with no stale marking and no filing, schedule `staydbrain --root ROOT dream` instead of `nightly`.
-
-Never tag a page `maintenance-safe` if it covers people, money, legal, or tax matters, or mixes them with other topics. The keyword veto is a backstop and cannot be fully reliable.
+**Reports only.** Schedule `staydbrain --root ROOT dream` instead of `nightly` when you want findings without repairs, stale marking, or filing. The keyword veto is a backstop and cannot be fully reliable.
 
 ## Recall
 
@@ -549,7 +542,7 @@ class ChecklistAdapter:
 
 
 brain = Brain.init("demo-adapter")
-brain.remember("Pool checklist", "Skim the pool weekly.", tags=("maintenance-safe",))
+brain.remember("Pool checklist", "Skim the pool weekly.")
 result = run_nightly(brain, (ChecklistAdapter(brain),), day=date(2026, 11, 15))
 print(result["repairs"])
 print((brain.brain_dir / "pages" / "pool-checklist.md").read_text().splitlines()[-1])
@@ -558,11 +551,11 @@ print((brain.brain_dir / "pages" / "pool-checklist.md").read_text().splitlines()
 Expected output:
 
 ```text
-{'applied': ['pool-checklist'], 'human_review': [{'slug': 'timeline-<UTC day>', 'reason': 'unclassified-domain'}]}
+{'applied': ['pool-checklist'], 'human_review': []}
 Skim the pool daily.
 ```
 
-The meeting is filed at `demo-adapter/brain/Meetings/2026/11/2026-11-15-0-pool-review.md`. Because `pool-checklist` is tagged `maintenance-safe` and the hash matched, the fact edit was applied. The untagged timeline page was held back. If the page were not tagged, or if the evidence mentioned something like an "invoice", the edit would be skipped and the page would show up in `human_review`.
+The meeting is filed at `demo-adapter/brain/Meetings/2026/11/2026-11-15-0-pool-review.md`. Because the hash matched, the fact edit was applied. If the evidence mentioned something like an "invoice", the edit would be skipped and the page would show up in `human_review`.
 
 Adapter rules: return data, never instructions. Keep keys stable. Do not put secrets or personal data in snapshots, because the scanner rejects the whole batch. Only emit `VerifiedFact` for operational facts the adapter has actually confirmed.
 
@@ -651,7 +644,7 @@ To try a schedule without real adapters, replace the `ExecStart` or `ProgramArgu
 - **Paths are validated.** Absolute paths, `..`, backslashes, encoded traversal, and symlinks anywhere in a managed path are all rejected. SQL is parameterized.
 - **Recalled memory is untrusted data.** Hosts must never execute it or let it authorize tools or writes.
 - **Writes over the server are off by default.** `serve` is read-only unless started with `--allow-write`.
-- **Sensitive domains go to a human.** People, money, legal, and tax pages are never auto-edited. Do not tag them `maintenance-safe`.
+- **Sensitive domains go to a human.** People, money, legal, and tax pages are never auto-edited. The keyword veto is a backstop.
 - **Nothing reaches outward.** This version has no network client, telemetry, listener, or autonomous external action.
 - **Audit everything.** `.agent-brain/audit.jsonl` is SHA-256 chained, with a separate head anchor, and `doctor` verifies it.
 - Report security issues privately, following [SECURITY.md](SECURITY.md). The threat model is in [docs/threat-model.md](docs/threat-model.md).
